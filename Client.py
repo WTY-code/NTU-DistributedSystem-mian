@@ -1,6 +1,4 @@
-from Config import *
 from Marshal import *
-import os
 import sys
 import socket
 import optparse
@@ -86,6 +84,12 @@ class Client:
                 self.initiateMonitoring(file_path, tracking_period, REM)
                 print('Monitoring concluded for "{}" with {} alterations.'.format(file_path, alteration_count))
 
+
+    def check_file_list(self):
+        print('check server file list:')
+        server_feedback = self.queryFileList()
+        print('Server File List:\n{}'.format(server_feedback[-1]))
+
     def tally_file_characters(self):
         path_to_file = input('Input file path name:')
         server_feedback = self.queryCount(path_to_file)
@@ -148,6 +152,10 @@ class Client:
         item = self.send([4, 1, STR, filePathname])
         return item
 
+    def queryFileList(self):
+        item = self.send([4,0])
+        return item
+
     def queryCreate(self, fileName, char):
         item = self.send([5, 2, STR, STR, fileName, char])
         return item
@@ -177,7 +185,8 @@ class Client:
         print('1: Read content of a file.')
         print('2: Insert content into a file.')
         print('3: Monitor updates of a file.')
-        print('4: Check length of content in file.')
+        # print('4: Check length of content in file.')
+        print('4: Check File List.')
         print('5: Create a new file.')
         print('q: Quit the platform.\n')
 
@@ -201,7 +210,7 @@ class Client:
             '1': self.fetch_file,
             '2': self.add_content,
             '3': self.monitorFile,
-            '4': self.tally_file_characters,
+            '4': self.check_file_list,# self.tally_file_characters,
             '5': self.createFile
         }
         return actions.get(choice, self.invalidInput)
@@ -229,8 +238,6 @@ if __name__ == "__main__":
                       )
 
     options, args = parser.parse_args()
-
-    client = Client()
 
     client = Client(host=options.ip, port=int(options.port), freshness_interval=options.freshness_interval)
 
