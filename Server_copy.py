@@ -11,7 +11,7 @@ import optparse
 
 class Server:
     def __init__(self):
-        self.UDP_ip = "localhost"#"10.241.239.157"
+        self.UDP_ip = "localhost"  # "10.241.239.157"
         self.UDP_port = 7777
         self.time = time.time()
         self.cache = []
@@ -46,14 +46,13 @@ class Server:
             print('Socket bind failed:\n{}'.format(e))
             sys.exit()
 
-
         # once socket bind, keep talking to client
         self.wait_for_req()
 
     # await data from client
     def wait_for_req(self):
         while True:
-            #print('Monitor List: {}'.format(self.monitorList))
+            # print('Monitor List: {}'.format(self.monitorList))
             print('Server is waiting for request from client...')
             msg, address = self.sock.recvfrom(SOCK_MAX)
             print(msg)
@@ -78,9 +77,9 @@ class Server:
         print('Socket closed...')
 
     def process_req(self, req, address):
-        msg = unpack(req)  # unpacked data as variable, msg
+        msg = unmarshal(req)  # unpacked data as variable, msg
         service_id = msg[0]
-        if service_id not in [0,1,2,3,4,5]:
+        if service_id not in [0, 1, 2, 3, 4, 5]:
             raise ValueError("Received an invalid service id!")
 
         elif service_id == 0:
@@ -161,9 +160,12 @@ class Server:
         if opr == ADD:
             if (address, filePathName) not in self.monitorList:
                 self.monitorList.append((address, filePathName))
-            print('{} added to the monitoring list for {} seconds for file: {}'.format(address, monitorInterval,                                                                       filePathName))
+            print('{} added to the monitoring list for {} seconds for file: {}'.format(address, monitorInterval,
+                                                                                       filePathName))
             print(self.monitorList)
-            return [3, 1, STR, '{} added to the monitoring list for {} seconds for file: {}'.format(address, monitorInterval, filePathName)]
+            return [3, 1, STR,
+                    '{} added to the monitoring list for {} seconds for file: {}'.format(address, monitorInterval,
+                                                                                         filePathName)]
         if opr == REM:
             if (address, filePathName) in self.monitorList:
                 self.monitorList.remove((address, filePathName))
@@ -197,16 +199,16 @@ class Server:
             for i in self.monitorList:  # Loops through whole monitoring list
                 if d[2] == i[1]:  # Checks if file is same as file registered for monitoring
                     print('Callback to {}: {}'.format(i[0], content))
-                    self.sock.sendto(pack(content), i[0])
+                    self.sock.sendto(marshal(content), i[0])
         return
 
     def replyAtLeastOnce(self, data, address):
         reply = self.process_req(data, address)
 
         if self.simulateLoss and random.randrange(0, 2) == 0:
-            self.sock.sendto(pack(reply), address)
+            self.sock.sendto(marshal(reply), address)
         elif self.simulateLoss == False:
-            self.sock.sendto(pack(reply), address)
+            self.sock.sendto(marshal(reply), address)
 
     def replyAtMostOnce(self, data, address):
         # check server cache for existence of request
@@ -214,9 +216,9 @@ class Server:
         for cacheEntry in self.cache:
             if cacheEntry[0] == [address[0], address[1], data]:
                 if self.simulateLoss and random.randrange(0, 2) == 0:
-                    self.sock.sendto(pack(cacheEntry[1]), address)
+                    self.sock.sendto(marshal(cacheEntry[1]), address)
                 elif self.simulateLoss == False:
-                    self.sock.sendto(pack(cacheEntry[1]), address)
+                    self.sock.sendto(marshal(cacheEntry[1]), address)
                 return
 
         reply = self.process_req(data, address)
@@ -226,9 +228,9 @@ class Server:
         self.cache.append(([address[0], address[1], data], reply))
 
         if self.simulateLoss and random.randrange(0, 2) == 0:
-            self.sock.sendto(pack(reply), address)
-        elif self.simulateLoss == False:
-            self.sock.sendto(pack(reply), address)
+            self.sock.sendto(marshal(reply), address)
+        elif self.simulateLoss is False:
+            self.sock.sendto(marshal(reply), address)
 
 
 if __name__ == "__main__":
