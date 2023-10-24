@@ -11,14 +11,14 @@ import optparse
 
 class Server:
     def __init__(self):
-        self.UDP_ip = "localhost"#"10.241.239.157"
+        self.UDP_ip = "localhost" #"10.241.239.157"
         self.UDP_port = 7777
         self.time = time.time()
         self.cache = []
         self.cacheLimit = 10
         self.monitorList = []  # monitoring list format: [address, filePathname]
         self.invocationSemantics = 'AT_LEAST_ONCE'
-        self.simulateLoss = True
+        self.simulateLoss = False
         self.dictPath = './file/'
         self.dict = 'file'
         # create file dictionary
@@ -78,7 +78,7 @@ class Server:
         print('Socket closed...')
 
     def process_req(self, req, address):
-        msg = unmarshal(req)  # unpacked data as variable, msg
+        msg = unmarshal(req)
         service_id = msg[0]
         if service_id not in [0,1,2,3,4,5]:
             raise ValueError("Received an invalid service id!")
@@ -100,7 +100,8 @@ class Server:
             return self.monitorFile(msg[2], msg[3], address, msg[-1])
 
         elif service_id == 4:  # Count content in file
-            return self.countFile(msg[2])
+            return self.collect_file_names()
+            # return self.countFile(msg[2])
 
         elif service_id == 5:  # Create a new file
             return self.createFile(msg[2], msg[3])
@@ -151,7 +152,6 @@ class Server:
             return [2, 1, ERR, str(e)]
 
     def monitorFile(self, filePathName, monitorInterval, address, opr):
-
         try:
             fileName = self.dictPath + filePathName
             f = open(fileName, 'r')
@@ -182,6 +182,14 @@ class Server:
         except FileNotFoundError:
             return [4, 1, ERR, "File does not exist on server"]
 
+    def collect_file_names(self):
+        file_names = []
+        for root, dirs, files in os.walk(self.dictPath):
+            for file in files:
+                file_names.append(file)
+        file_list = "\n".join(file_names)
+        return [4,1,STR,file_list]
+
     def createFile(self, filePathName, char):
         try:
             fileName = self.dictPath + filePathName
@@ -208,7 +216,7 @@ class Server:
 
         if self.simulateLoss and random.randrange(0, 2) == 0:
             self.sock.sendto(marshal(reply), address)
-        elif self.simulateLoss == False:
+        elif self.simulateLoss is False:
             self.sock.sendto(marshal(reply), address)
 
     def replyAtMostOnce(self, data, address):
@@ -230,7 +238,7 @@ class Server:
 
         if self.simulateLoss and random.randrange(0, 2) == 0:
             self.sock.sendto(marshal(reply), address)
-        elif self.simulateLoss == False:
+        elif self.simulateLoss is False:
             self.sock.sendto(marshal(reply), address)
 
 
