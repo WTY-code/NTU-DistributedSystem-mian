@@ -152,7 +152,7 @@ class Client:
         item = self.send([5, 2, STR, STR, fileName, char])
         return item
 
-    def validateCache(self):
+    def checkCache(self):
         cacheTimestamp, clientTimestamp = self.cache[0], self.cache[1]
         if self.cache == '':
             print('No cache data. Requesting from server.')
@@ -163,7 +163,7 @@ class Client:
             print('Server access unnecessary, loading from cache.')
             return False
         else:
-            serverTimestamp = self.send([0, 1, STR, 'Fetch server time'])[-1]  # Method to retrieve server time
+            serverTimestamp = self.send([0, 1, STR, 'Get Tserver'])[-1]  # Method to retrieve server time
             self.cache[0] = currentTimestamp
             if clientTimestamp == serverTimestamp:
                 print('Cache is up-to-date. No server changes detected.')
