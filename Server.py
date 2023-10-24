@@ -11,7 +11,7 @@ import optparse
 
 class Server:
     def __init__(self):
-        self.UDP_ip = "10.241.239.157"
+        self.UDP_ip = "localhost"#"10.241.239.157"
         self.UDP_port = 7777
         self.time = time.time()
         self.cache = []
@@ -48,105 +48,106 @@ class Server:
 
 
         # once socket bind, keep talking to client
-        self.await_data()
+        self.wait_for_req()
 
     # await data from client
-    def await_data(self):
+    def wait_for_req(self):
         while True:
             #print('Monitor List: {}'.format(self.monitorList))
-            print('Awaiting data from client...')
-            data, address = self.sock.recvfrom(4096)
-            print(data)
-            print('Received data from {}:\n{!r}'.format(address, data))
-            self.replyReq(data, address)
+            print('Server is waiting for request from client...')
+            msg, address = self.sock.recvfrom(SOCK_MAX)
+            print(msg)
+            print('Received request message from {}:\n{!r}'.format(address, msg))
+            self.reply(msg, address)
 
-    def replyReq(self, data, address):
+    def reply(self, req, address):
+        if req is None:
+            raise ValueError("Received an empty Request!")
         if self.invocationSemantics == 'AT_LEAST_ONCE':
-            self.replyAtLeastOnce(data, address)
+            self.replyAtLeastOnce(req, address)
         elif self.invocationSemantics == 'AT_MOST_ONCE':
-            self.replyAtMostOnce(data, address)
+            self.replyAtMostOnce(req, address)
         return
 
-    def close(self):
+    def close_socket(self):
         print('Closing socket...')
         try:
             self.sock.close()
         except socket.error as e:
-            print('Error closing socket:\n{}'.format(e))
+            print('ERROR in closing socket:\n{}'.format(e))
         print('Socket closed...')
 
-    def processReq(self, data, address):
-        if not data:
-            return 'Request not found.'
+    def process_req(self, req, address):
+        msg = unpack(req)  # unpacked data as variable, msg
+        service_id = msg[0]
+        if service_id not in [0,1,2,3,4,5]:
+            raise ValueError("Received an invalid service id!")
 
-        d = unpack(data)  # unpacked data as variable, d
-        service = d[0]
+        elif service_id == 0:
+            return self.reply_server_time()
 
-        if service == 1:  # Read content of file
-            return self.readFile(d[2], d[3], d[4])
+        elif service_id == 1:  # Read content of file
 
-        elif service == 2:  # Insert content into file
+            return self.read_file(msg[2], msg[3], msg[4])
+
+        elif service_id == 2:  # Insert content into file
             self.time = time.time()
-            content = self.insertContent(d[2], d[3], d[4])
-            self.callback(content, d)
+            content = self.insert_content(msg[2], msg[3], msg[4])
+            self.callback(content, msg)
             return content
 
-        elif service == 3:  # Monitor updates made to content of specified file
-            return self.monitorFile(d[2], d[3], address, d[-1])
+        elif service_id == 3:  # Monitor updates made to content of specified file
+            return self.monitorFile(msg[2], msg[3], address, msg[-1])
 
-        elif service == 4:  # Count content in file
-            return self.countFile(d[2])
+        elif service_id == 4:  # Count content in file
+            return self.countFile(msg[2])
 
-        elif service == 5:  # Create a new file
-            return self.createFile(d[2], d[3])
+        elif service_id == 5:  # Create a new file
+            return self.createFile(msg[2], msg[3])
 
-        elif service == 0:
-            return self.sendTserver()
-
-    def sendTserver(self):
+    def reply_server_time(self):
         return [0, 1, FLT, self.time]
 
-    def readFile(self, filePathName, offset, numBytes):
+    def read_file(self, file_name, offset, length):
         try:
-            fileName = self.dictPath + filePathName
-            f = open(fileName, 'r')
-            content = f.read()
-            f.close()
-
-            if offset > len(content):
-                return [1, 1, ERR, "Offset exceeds file length"]
-
-            f = open(fileName, 'r')
-            f.seek(offset, 0)
-            content = f.read(int(numBytes))
-            f.close()
-            return [1, 1, STR, content]
+            file_path = self.dictPath + file_name
+            with open(file_path, "r") as f:
+                content = f.read()
+                file_len = len(content)
+                if offset >= file_len:
+                    return [1, 1, ERR, "Offset exceeds file length"]
+                else:
+                    f.seek(offset, 0)
+                    content = f.read(int(length))
+                    f.close()
+                    return [1, 1, STR, content]
         except FileNotFoundError:
-            return [1, 1, ERR, "File does not exist on server"]
+            return [1, 1, ERR, "ERROR: File does not exist!"]
         except OSError as e:
             return [1, 1, ERR, str(e)]
 
-    def insertContent(self, filePathName, offset, numBytes):
+    def insert_content(self, file_name, offset, length):
         try:
-            fileName = self.dictPath + filePathName
-            f = open(fileName, 'r')
-            content = f.read()
-            f.close()
-
-            if offset > len(content):
-                return [2, 1, ERR, "Offset exceeds file length"]
-
-            f = open(fileName, 'w')
-            content = content[0:offset] + numBytes + content[offset:]
-            f.write(content)
-            f.close()
-
-            return [2, 2, FLT, STR, self.time, content]
+            file_path = self.dictPath + file_name
+            with open(file_path, "r") as fr:
+                content = fr.read()
+                file_len = len(content)
+                if offset >= file_len:
+                    fr.close()
+                    return [2, 1, ERR, "Offset exceeds file length"]
+                fr.close()
+            with open(file_path, "w") as fw:
+                content = content[0:offset] + length + content[offset:]
+                fw.write(content)
+                fw.close()
+                return [2, 2, FLT, STR, self.time, content]
 
         except FileNotFoundError:
             return [2, 1, ERR, "File does not exist on server"]
         except OSError as e:
             return [2, 1, ERR, str(e)]
+        except Exception as other_e:
+            return [2, 1, ERR, str(other_e)]
 
     def monitorFile(self, filePathName, monitorInterval, address, opr):
 
@@ -200,7 +201,7 @@ class Server:
         return
 
     def replyAtLeastOnce(self, data, address):
-        reply = self.processReq(data, address)
+        reply = self.process_req(data, address)
 
         if self.simulateLoss and random.randrange(0, 2) == 0:
             self.sock.sendto(pack(reply), address)
@@ -218,7 +219,7 @@ class Server:
                     self.sock.sendto(pack(cacheEntry[1]), address)
                 return
 
-        reply = self.processReq(data, address)
+        reply = self.process_req(data, address)
 
         if len(self.cache) == self.cacheLimit:
             self.cache = self.cache[1:]

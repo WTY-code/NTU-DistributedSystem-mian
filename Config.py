@@ -4,3 +4,4 @@ STR = 12  # STRING
 FLT = 13  # Float
 ADD = 100
 REM = 101
+SOCK_MAX = 4096
