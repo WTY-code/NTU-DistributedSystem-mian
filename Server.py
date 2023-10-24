@@ -1,3 +1,5 @@
+import os
+
 from Marshal import *
 from Config import *
 import socket
@@ -17,6 +19,11 @@ class Server:
         self.monitorList = []  # monitoring list format: [address, filePathname]
         self.invocationSemantics = 'AT_LEAST_ONCE'
         self.simulateLoss = True
+        self.dictPath = './file/'
+        self.dict = 'file'
+        # create file dictionary
+        if not os.path.exists(self.dict):
+            os.mkdir(self.dict)
 
     def run(self):
         try:
@@ -39,6 +46,7 @@ class Server:
             print('Socket bind failed:\n{}'.format(e))
             sys.exit()
 
+
         # once socket bind, keep talking to client
         self.await_data()
 
@@ -48,6 +56,7 @@ class Server:
             #print('Monitor List: {}'.format(self.monitorList))
             print('Awaiting data from client...')
             data, address = self.sock.recvfrom(4096)
+            print(data)
             print('Received data from {}:\n{!r}'.format(address, data))
             self.replyReq(data, address)
 
@@ -71,7 +80,6 @@ class Server:
             return 'Request not found.'
 
         d = unpack(data)  # unpacked data as variable, d
-
         service = d[0]
 
         if service == 1:  # Read content of file
@@ -84,7 +92,7 @@ class Server:
             return content
 
         elif service == 3:  # Monitor updates made to content of specified file
-            return self.monitorFile(d[2], d[3], address)
+            return self.monitorFile(d[2], d[3], address, d[-1])
 
         elif service == 4:  # Count content in file
             return self.countFile(d[2])
@@ -100,14 +108,15 @@ class Server:
 
     def readFile(self, filePathName, offset, numBytes):
         try:
-            f = open(filePathName, 'r')
+            fileName = self.dictPath + filePathName
+            f = open(fileName, 'r')
             content = f.read()
             f.close()
 
             if offset > len(content):
                 return [1, 1, ERR, "Offset exceeds file length"]
 
-            f = open(filePathName, 'r')
+            f = open(fileName, 'r')
             f.seek(offset, 0)
             content = f.read(int(numBytes))
             f.close()
@@ -119,14 +128,15 @@ class Server:
 
     def insertContent(self, filePathName, offset, numBytes):
         try:
-            f = open(filePathName, 'r')
+            fileName = self.dictPath + filePathName
+            f = open(fileName, 'r')
             content = f.read()
             f.close()
 
             if offset > len(content):
                 return [2, 1, ERR, "Offset exceeds file length"]
 
-            f = open(filePathName, 'w')
+            f = open(fileName, 'w')
             content = content[0:offset] + numBytes + content[offset:]
             f.write(content)
             f.close()
@@ -138,36 +148,46 @@ class Server:
         except OSError as e:
             return [2, 1, ERR, str(e)]
 
-    def monitorFile(self, filePathName, monitorInterval, address):
+    def monitorFile(self, filePathName, monitorInterval, address, opr):
 
         try:
-            f = open(filePathName, 'r')
+            fileName = self.dictPath + filePathName
+            f = open(fileName, 'r')
             f.close()
         except FileNotFoundError:
             return [3, 1, ERR, "File does not exist on server"]
 
-        if (address, filePathName) not in self.monitorList:
-            self.monitorList.append((address, filePathName))
+        if opr == ADD:
+            if (address, filePathName) not in self.monitorList:
+                self.monitorList.append((address, filePathName))
+            print('{} added to the monitoring list for {} seconds for file: {}'.format(address, monitorInterval,                                                                       filePathName))
+            print(self.monitorList)
             return [3, 1, STR, '{} added to the monitoring list for {} seconds for file: {}'.format(address, monitorInterval, filePathName)]
-        else:
-            self.monitorList.remove((address, filePathName))
+        if opr == REM:
+            if (address, filePathName) in self.monitorList:
+                self.monitorList.remove((address, filePathName))
+            print('{} removed from monitoring list since monitor interval ended'.format(address))
+            print(self.monitorList)
             return [3, 1, STR, '{} removed from monitoring list since monitor interval ended'.format(address)]
 
     def countFile(self, filePathName):
         try:
-            f = open(filePathName, 'r')
+            fileName = self.dictPath + filePathName
+            f = open(fileName, 'r')
             count = len(f.read())
             f.close()
             return [4, 1, INT, count]
         except FileNotFoundError:
             return [4, 1, ERR, "File does not exist on server"]
 
-    def createFile(self, fileName, char):
+    def createFile(self, filePathName, char):
         try:
+            fileName = self.dictPath + filePathName
+            print(fileName)
             f = open(fileName, 'w')
             f.write(char)
             f.close()
-            return [5, 1, STR, '{} file created in server.'.format(fileName)]
+            return [5, 1, STR, '{} file created in server.'.format(filePathName)]
         except Exception as e:
             return [5, 1, ERR, str(e)]
 
