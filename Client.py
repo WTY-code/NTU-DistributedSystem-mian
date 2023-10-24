@@ -27,14 +27,15 @@ class Client:
             sys.exit()
 
         while True:
-            print('Choose a service according to the following options:\n')
-            print('1: Read content of file. Specify file pathname, offset(in bytes) and no. of bytes.\n')
-            print('2: Insert content into file. Specify file pathname, offset(in bytes) and sequence of bytes to write into file.\n')
-            print('3: Monitor updates of a file.\n')
-            print('4: Calculate length of content in file.\n')
-            print('5: Create a new file.\n')
+            print('\n*****Function Menu of Remote File System*****')
+            print('1: Read content of a file.')
+            print('2: Insert content into a file.')
+            print('3: Monitor updates of a file.')
+            print('4: Check length of content in file.')
+            print('5: Create a new file.')
+            print('q: Quit the platform.\n')
 
-            userChoice = input('Input 1-5 or "q" to exit:')
+            userChoice = input('Input 1 to 5 to achieve function or "q" to quit:')
 
             if userChoice == '1':
                 filePathname = input('Input file path name:')
@@ -61,27 +62,31 @@ class Client:
                 if monitorInterval < 0.0:
                     print('Monitor interval input invalid.')
                 else:
-                    reply = self.queryMonitor(filePathname, monitorInterval)[-1]
+                    # 发送消息建立第一次连接
+                    reply = self.queryMonitor(filePathname, monitorInterval, ADD)[-1]
                     print('Server Reply: {}'.format(reply))
                     if reply != 'File does not exist on server':
                         timeStart = time.time()
-                        while monitorInterval > 0:
+                        updateTimes = 0
+                        while monitorInterval > 0.0:
                             try:
-                                self.sock.settimeout(monitorInterval)
-                                data, address = self.sock.recvfrom(4096)
+                                self.sock.settimeout(monitorInterval)# 设置timeout 为计时时间
+                                data, address = self.sock.recvfrom(4096) # 监视和等待返回的更新消息
                                 update = unpack(data)[-1]
-                                print('Update made to {}: {}'.format(
-                                    filePathname, update))
+                                updateTimes += 1
+                                print('{} times updating in {}:{}'.format(
+                                    updateTimes,filePathname, update))
                                 self.cache[-1] = update
-
-                                # When receive update, reduce interval timeout of socket
-                                timeNow = time.time()
-                                monitorInterval -= (timeNow - timeStart)
+                                # reduce time out
+                                monitorInterval -= (time.time() - timeStart)
                             except socket.timeout:
-                                self.queryMonitor(filePathname, monitorInterval)
+                                # print(time.time() - timeStart)
+                                # self.queryMonitor(filePathname, monitorInterval, ADD)
                                 break
-                        print('Monitoring of file "{}" ended.'.format(filePathname))
-                        self.queryMonitor(filePathname, monitorInterval)
+                        print(time.time() - timeStart)
+                        self.sock.settimeout(1) # 恢复超时时间
+                        self.queryMonitor(filePathname, monitorInterval, REM)
+                        print('Monitoring of file "{}" ended with {} times change.'.format(filePathname,updateTimes))
 
             elif userChoice == '4':
                 filePathname = input('Input file path name:')
@@ -100,12 +105,12 @@ class Client:
             else:
                 print('You have entered an incorrect service.')
                 print('Please input a number from 1-5 or "q" to exit.\n')
-
         return
 
     def send(self, msg):
         while True:
             try:
+                print(msg)
                 # Simulate packet loss based on invocation scheme
                 if self.simulateLoss and random.randrange(0, 2) == 0:
                     self.sock.sendto(pack(msg), (self.HOST, self.PORT))
@@ -148,8 +153,9 @@ class Client:
             self.cache[-1], self.cache[1] = item[-1], item[-2]
         return item
 
-    def queryMonitor(self, filePathname, monitorInterval):
-        item = self.send([3, 2, STR, FLT, filePathname, monitorInterval])
+    def queryMonitor(self, filePathname, monitorInterval, opr):
+        item = self.send([3, 3, STR, FLT, INT, filePathname, monitorInterval, opr])
+        print(item)
         return item
 
     def queryCount(self, filePathname):
