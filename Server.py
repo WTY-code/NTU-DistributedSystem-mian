@@ -184,6 +184,8 @@ class Server:
     def createFile(self, filePathName, char):
         try:
             fileName = self.dictPath + filePathName
+            if os.path.exists(fileName):
+                return [5, 1, ERR, 'File {} already exists, cannot create again.'.format(filePathName)]
             print(fileName)
             f = open(fileName, 'w')
             f.write(char)
