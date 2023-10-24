@@ -18,7 +18,7 @@ class Server:
         self.cacheLimit = 10
         self.monitorList = []  # monitoring list format: [address, filePathname]
         self.invocationSemantics = 'AT_LEAST_ONCE'
-        self.simulateLoss = True
+        self.simulateLoss = False
         self.dictPath = './file/'
         self.dict = 'file'
         # create file dictionary
