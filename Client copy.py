@@ -75,7 +75,7 @@ class Client:
                             try:
                                 self.sock.settimeout(monitorInterval)# 设置timeout 为计时时间
                                 data, address = self.sock.recvfrom(4096) # 监视和等待返回的更新消息
-                                update = unpack(data)[-1]
+                                update = unmarshal(data)[-1]
                                 updateTimes += 1
                                 print('{} times updating in {}:{}'.format(
                                     updateTimes,filePathname, update))
@@ -116,12 +116,12 @@ class Client:
                 print(msg)
                 # Simulate packet loss based on invocation scheme
                 if self.simulateLoss and random.randrange(0, 2) == 0:
-                    self.sock.sendto(pack(msg), (self.HOST, self.PORT))
+                    self.sock.sendto(marshal(msg), (self.HOST, self.PORT))
                 elif self.simulateLoss == False:
-                    self.sock.sendto(pack(msg), (self.HOST, self.PORT))
+                    self.sock.sendto(marshal(msg), (self.HOST, self.PORT))
 
                 data, address = self.sock.recvfrom(4096)
-                reply = unpack(data)
+                reply = unmarshal(data)
                 if reply[0] == 0:
                     self.cache[1] = reply[-1]
                 return reply

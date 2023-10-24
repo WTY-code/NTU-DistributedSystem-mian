@@ -78,7 +78,7 @@ class Server:
         print('Socket closed...')
 
     def process_req(self, req, address):
-        msg = unpack(req)  # unpacked data as variable, msg
+        msg = unmarshal(req)  # unpacked data as variable, msg
         service_id = msg[0]
         if service_id not in [0,1,2,3,4,5]:
             raise ValueError("Received an invalid service id!")
@@ -197,16 +197,16 @@ class Server:
             for i in self.monitorList:  # Loops through whole monitoring list
                 if d[2] == i[1]:  # Checks if file is same as file registered for monitoring
                     print('Callback to {}: {}'.format(i[0], content))
-                    self.sock.sendto(pack(content), i[0])
+                    self.sock.sendto(marshal(content), i[0])
         return
 
     def replyAtLeastOnce(self, data, address):
         reply = self.process_req(data, address)
 
         if self.simulateLoss and random.randrange(0, 2) == 0:
-            self.sock.sendto(pack(reply), address)
+            self.sock.sendto(marshal(reply), address)
         elif self.simulateLoss == False:
-            self.sock.sendto(pack(reply), address)
+            self.sock.sendto(marshal(reply), address)
 
     def replyAtMostOnce(self, data, address):
         # check server cache for existence of request
@@ -214,9 +214,9 @@ class Server:
         for cacheEntry in self.cache:
             if cacheEntry[0] == [address[0], address[1], data]:
                 if self.simulateLoss and random.randrange(0, 2) == 0:
-                    self.sock.sendto(pack(cacheEntry[1]), address)
+                    self.sock.sendto(marshal(cacheEntry[1]), address)
                 elif self.simulateLoss == False:
-                    self.sock.sendto(pack(cacheEntry[1]), address)
+                    self.sock.sendto(marshal(cacheEntry[1]), address)
                 return
 
         reply = self.process_req(data, address)
@@ -226,9 +226,9 @@ class Server:
         self.cache.append(([address[0], address[1], data], reply))
 
         if self.simulateLoss and random.randrange(0, 2) == 0:
-            self.sock.sendto(pack(reply), address)
+            self.sock.sendto(marshal(reply), address)
         elif self.simulateLoss == False:
-            self.sock.sendto(pack(reply), address)
+            self.sock.sendto(marshal(reply), address)
 
 
 if __name__ == "__main__":
