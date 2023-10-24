@@ -11,132 +11,117 @@ timeoutLimit = 1
 
 class Client:
 
-    def __init__(self):
-        self.cache = [0, 0, '']  # cache = [Tvalid, Tclient, cacheEntry]
-        self.HOST = 'localhost'
-        self.PORT = 7777
-        self.freshness_interval = 10
-        self.simulateLoss = True
+    def __init__(self, host='localhost', port=7777, freshness_interval=10, simulateLoss=False):
+        self.cache = [0, 0, '']
+        self.HOST = host
+        self.PORT = port
+        self.freshness_interval = freshness_interval
+        self.simulateLoss = simulateLoss
+        self.sock = None
 
-
-    def run(self):
+    def startSocket(self):
         print('Starting client socket...')
-
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.sock.settimeout(timeoutLimit)
         except socket.error as e:
-            print("Failed to create client socket:\n{}".format(e))
+            print(f"Failed to create client socket:\n{e}")
             sys.exit()
 
-        while True:
-            print('\n*****Function Menu of Remote File System*****')
-            print('1: Read content of a file.')
-            print('2: Insert content into a file.')
-            print('3: Monitor updates of a file.')
-            print('4: Check length of content in file.')
-            print('5: Create a new file.')
-            print('q: Quit the platform.\n')
-
-            userChoice = input('Input 1 to 5 to achieve function or "q" to quit:')
-
-            if userChoice == '1':
-                filePathname = input('Input file path name:')
-                offset = int(input('Input offset in bytes:'))
-                numBytes = int(input('Input number of bytes:'))
-                check = self.checkCache()
-                if not check:
-                    print('Retrieved from Cache: {}'.format(self.cache[-1]))
-                else:
-                    print('Server Reply: {}'.format(
-                        self.queryRead(filePathname, offset, numBytes)[-1]))
-
-            elif userChoice == '2':
-                filePathname = input('Input file path name:')
-                offset = int(input('Input offset in bytes:'))
-                seq = input('Input sequence of bytes:')
-                print('Server Reply: {}'.format(
-                    self.queryInsert(filePathname, offset, seq)[-1]))
-
-            elif userChoice == '3':
-                filePathname = input('Input file path name:')
-                monitorInterval = float(input('Input length of monitor interval in seconds:'))
-
-                if monitorInterval < 0.0:
-                    print('Monitor interval input invalid.')
-                else:
-                    # 发送消息建立第一次连接
-                    reply = self.queryMonitor(filePathname, monitorInterval, ADD)[-1]
-                    print('Server Reply: {}'.format(reply))
-                    if reply != 'File does not exist on server':
-                        timeStart = time.time()
-                        updateTimes = 0
-                        while monitorInterval > 0.0:
-                            try:
-                                self.sock.settimeout(monitorInterval)# 设置timeout 为计时时间
-                                data, address = self.sock.recvfrom(4096) # 监视和等待返回的更新消息
-                                update = unpack(data)[-1]
-                                updateTimes += 1
-                                print('{} times updating in {}:{}'.format(
-                                    updateTimes,filePathname, update))
-                                self.cache[-1] = update
-                                # reduce time out
-                                monitorInterval -= (time.time() - timeStart)
-                            except socket.timeout:
-                                # print(time.time() - timeStart)
-                                # self.queryMonitor(filePathname, monitorInterval, ADD)
-                                break
-                        print(time.time() - timeStart)
-                        self.sock.settimeout(timeoutLimit) # 恢复超时时间
-                        self.queryMonitor(filePathname, monitorInterval, REM)
-                        print('Monitoring of file "{}" ended with {} times change.'.format(filePathname,updateTimes))
-
-            elif userChoice == '4':
-                filePathname = input('Input file path name:')
-                print('Server Reply: {} characters in {}'.format(
-                    self.queryCount(filePathname)[-1], filePathname))
-
-            elif userChoice == '5':
-                fileName = input('Input file name:')
-                char = str(input('Input file content:'))
-                reply = self.queryCreate(fileName, char)[-1]
-                print('Server Reply: {}'.format(reply))
-
-            elif userChoice == 'q':
-                self.close()
-                break
-            else:
-                print('You have entered an incorrect service.')
-                print('Please input a number from 1-5 or "q" to exit.\n')
-        return
-
-    def send(self, msg):
-        while True:
-            try:
-                print(msg)
-                # Simulate packet loss based on invocation scheme
-                if self.simulateLoss and random.randrange(0, 2) == 0:
-                    self.sock.sendto(pack(msg), (self.HOST, self.PORT))
-                elif self.simulateLoss == False:
-                    self.sock.sendto(pack(msg), (self.HOST, self.PORT))
-
-                data, address = self.sock.recvfrom(4096)
-                reply = unpack(data)
-                if reply[0] == 0:
-                    self.cache[1] = reply[-1]
-                return reply
-            except socket.timeout:
-                print('Timeout')
-            except Exception as e:
-                print('Error occured while sending: {}'.format(e))
-
-    def close(self):
+    def closeSocket(self):
         print('Closing socket...')
         try:
             self.sock.close()
         except socket.error as e:
-            print('Error closing socket:\n{}'.format(e))
+            print(f'Error closing socket:\n{e}')
         print('Socket closed...')
+    
+
+    def fetch_file(self):
+        file_identifier = input('Input file path name:')
+        start = int(input('Input offset in bytes:'))
+        length = int(input('Input number of bytes:'))
+        is_cache_invalid = self.checkCache()
+        if not is_cache_invalid:
+            print('Retrieved from Cache: {}'.format(self.cache[-1]))
+        else:
+            server_message = self.queryRead(file_identifier, start, length)
+            print('Server Reply: {}'.format(server_message[-1]))
+
+    def add_content(self):
+        file_path = input('Input file path name:')
+        byte_offset = int(input('Input offset in bytes:'))
+        content_sequence = input('Input sequence of bytes:')
+        server_response = self.queryInsert(file_path, byte_offset, content_sequence)
+        print('Server Reply: {}'.format(server_response[-1]))
+
+    def monitorFile(self):
+        file_path = input('Input file path name:')
+        tracking_period = float(input('Input length of monitor interval in seconds:'))
+
+        if tracking_period < 0.0:
+            print('Invalid duration for monitoring.')
+        else:
+            # Establish initial connection by sending a message
+            initial_response = self.initiateMonitoring(file_path, tracking_period, ADD)[-1]
+            print('Server Response: {}'.format(initial_response))
+            if initial_response != 'File does not exist on server':
+                observation_commencement = time.time()
+                alteration_count = 0
+                while tracking_period > 0.0:
+                    try:
+                        self.sock.settimeout(tracking_period)  # Adjust timeout to tracking period
+                        packet, server_addr = self.sock.recvfrom(4096)  # Await update notifications
+                        alteration_details = unpack(packet)[-1]
+                        alteration_count += 1
+                        print('Alteration #{0} in {1}: {2}'.format(
+                            alteration_count, file_path, alteration_details))
+                        self.cache[-1] = alteration_details
+                        # Decrement remaining monitor interval
+                        tracking_period -= (time.time() - observation_commencement)
+                    except socket.timeout:
+                        break  # Exit loop on timeout
+                print('Elapsed time: ', time.time() - observation_commencement)
+                self.sock.settimeout(timeoutLimit)  # Reset to default timeout
+                self.initiateMonitoring(file_path, tracking_period, REM)
+                print('Monitoring concluded for "{}" with {} alterations.'.format(file_path, alteration_count))
+
+
+    def tally_file_characters(self):
+        path_to_file = input('Input file path name:')
+        server_feedback = self.queryCount(path_to_file)
+        print('Server Reply: {} characters in {}'.format(server_feedback[-1], path_to_file))
+
+    def createFile(self):
+        designated_filename = input('Input file name:')
+        content_input = str(input('Input file content:'))
+        response = self.queryCreate(designated_filename, content_input)[-1]
+        print('Server Reply: {}'.format(response))
+
+    def invalidInput(self):
+        print('Invalid input. Please enter a number from 1-5 or "q" to exit.\n')
+
+
+    def send(self, message):
+        transmission_in_progress = True
+        while transmission_in_progress:
+            try:
+                print(message)
+                # Introduce potential packet loss for simulation purposes
+                packet_loss_simulation = self.simulateLoss and random.randint(0, 2) == 0
+                if packet_loss_simulation or not self.simulateLoss:
+                    packet = pack(message)
+                    self.sock.sendto(packet, (self.HOST, self.PORT))
+
+                response_packet, server_address = self.sock.recvfrom(4096)
+                response_message = unpack(response_packet)
+                if response_message[0] == 0:
+                    self.cache[1] = response_message[-1]
+                return response_message
+            except socket.timeout:
+                print('Transmission delay exceeded. Retrying...')
+            except Exception as transmission_issue:
+                print('Transmission disruption: {}'.format(transmission_issue))
 
     def queryRead(self, filePathname, offset, numBytes):
         item = self.send([1, 3, STR, INT, INT, filePathname, offset, numBytes])
@@ -156,7 +141,7 @@ class Client:
             self.cache[-1], self.cache[1] = item[-1], item[-2]
         return item
 
-    def queryMonitor(self, filePathname, monitorInterval, opr):
+    def initiateMonitoring(self, filePathname, monitorInterval, opr):
         item = self.send([3, 3, STR, FLT, INT, filePathname, monitorInterval, opr])
         print(item)
         return item
@@ -169,26 +154,61 @@ class Client:
         item = self.send([5, 2, STR, STR, fileName, char])
         return item
 
-    def checkCache(self):
-        Tvalid, Tclient = self.cache[0], self.cache[1]
+    def validateCache(self):
+        cacheTimestamp, clientTimestamp = self.cache[0], self.cache[1]
         if self.cache == '':
-            print('Cache entry empty. Send req to server')
+            print('No cache data. Requesting from server.')
             return True
-        Tnow = time.time()
 
-        if Tnow - Tvalid < self.freshness_interval:
-            print('Does not need access to server, read from cache')
+        currentTimestamp = time.time()
+        if currentTimestamp - cacheTimestamp < self.freshness_interval:
+            print('Server access unnecessary, loading from cache.')
             return False
-        elif Tnow - Tvalid >= self.freshness_interval:
-            Tserver = self.send([0, 1, STR, 'Get Tserver'])[-1]  # fn to obtain Tserver
-            self.cache[0] = Tnow
-            if Tclient == Tserver:
-                print('Cache entry valid. Data not modified at server.')
+        else:
+            serverTimestamp = self.send([0, 1, STR, 'Fetch server time'])[-1]  # Method to retrieve server time
+            self.cache[0] = currentTimestamp
+            if clientTimestamp == serverTimestamp:
+                print('Cache is up-to-date. No server changes detected.')
                 return False
-            elif Tclient < Tserver:
-                print('Cache entry invalid. Send req to server')
+            elif clientTimestamp < serverTimestamp:
+                print('Outdated cache. Requesting update from server.')
                 return True
 
+
+    def showMenu(self):
+        print('\n*****Function Menu of Remote File System*****')
+        print('1: Read content of a file.')
+        print('2: Insert content into a file.')
+        print('3: Monitor updates of a file.')
+        print('4: Check length of content in file.')
+        print('5: Create a new file.')
+        print('q: Quit the platform.\n')
+
+    def mainLoop(self):
+        self.startSocket()
+
+        while True:
+            self.showMenu()
+            userChoice = input('Select an option (1-5 or "q" to quit): ')
+            if userChoice == 'q':
+                break
+
+            action = self.getAction(userChoice)
+            if action:
+                action()
+
+        self.closeSocket()
+    
+    def getAction(self, choice):
+        actions = {
+            '1': self.fetch_file,
+            '2': self.add_content,
+            '3': self.monitorFile,
+            '4': self.tally_file_characters,
+            '5': self.createFile
+        }
+        return actions.get(choice, self.invalidInput)
+    
 
 if __name__ == "__main__":
 
@@ -216,8 +236,6 @@ if __name__ == "__main__":
 
     client = Client()
 
-    client.freshness_interval = options.freshness_interval
-    client.PORT = int(options.port)
-    client.HOST = str(options.ip)
+    client = Client(host=options.ip, port=int(options.port), freshness_interval=options.freshness_interval)
 
-    client.run()
+    client.mainLoop()
