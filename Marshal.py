@@ -1,6 +1,7 @@
 from Config import *
 import math
 
+
 # packed object index format:
 # 0 : service ID
 # 1 : number of objects, n
@@ -8,84 +9,92 @@ import math
 # rest : objects
 
 
-def pack(msg):
+def marshal(msg):
     numObj = msg[1]
-    packed = [msg[0], numObj]
+    marshalled = [msg[0], numObj]
+
+    def marshal_and_extend(value, marshal_func):
+        marshalled.append(value)
+        marshalled.extend(marshal_func(msg[numObj + i]))
 
     for i in range(2, numObj + 2):
-        packed.append(msg[i])
-        if msg[i] == INT:
-            packed.extend(packInt(msg[numObj+i]))
-        elif msg[i] == STR:
-            packed.extend(packString(msg[numObj+i]))
-        elif msg[i] == FLT:
-            packed.extend(packFloat(msg[numObj+i]))
-        elif msg[i] == ERR:
-            packed.extend(packString(msg[numObj+i]))
-    return bytes(packed)
+        obj_type = msg[i]
+        if obj_type == INT:
+            marshal_and_extend(obj_type, marshal_int)
+        elif obj_type == STR or obj_type == ERR:
+            marshal_and_extend(obj_type, marshal_str)
+        elif obj_type == FLT:
+            marshal_and_extend(obj_type, marshal_flt)
+
+    return bytes(marshalled)
 
 
-def unpack(msg):
+def unmarshal(msg):
     serviceID = msg[0]
     numObj = msg[1]
-    unpacked = [serviceID, numObj]
+    unmarshalled = [serviceID, numObj]
     currentIndex = 2
+
+    def unmarshal_and_append(obj_type, obj_data):
+        if obj_type == INT:
+            unmarshalled.append(unmarshal_int(obj_data))
+        elif obj_type == STR or obj_type == ERR:
+            unmarshalled.append(unmarshal_str(obj_data))
+        elif obj_type == FLT:
+            unmarshalled.append(unmarshal_flt(obj_data))
+
     for i in range(numObj):
-        lenOfCurrentObj = msg[currentIndex + 1] + 1
+        obj_type = msg[currentIndex]
+        len_of_current_obj = msg[currentIndex + 1] + 1
+        obj_data = msg[currentIndex + 1: currentIndex + len_of_current_obj]
 
-        if msg[currentIndex] == INT:
-            unpacked.append(
-                unpackInt(msg[currentIndex+1: currentIndex+lenOfCurrentObj]))
-        elif msg[currentIndex] == STR:
-            unpacked.append(unpackString(
-                msg[currentIndex+1: currentIndex+lenOfCurrentObj]))
-        elif msg[currentIndex] == FLT:
-            unpacked.append(unpackFloat(
-                msg[currentIndex+1: currentIndex+lenOfCurrentObj]))
-        elif msg[currentIndex] == ERR:
-            unpacked.append(unpackString(
-                msg[currentIndex+1: currentIndex+lenOfCurrentObj]))
-        currentIndex += lenOfCurrentObj
+        unmarshal_and_append(obj_type, obj_data)
 
-    return unpacked
+        currentIndex += len_of_current_obj
+
+    return unmarshalled
 
 
-def packInt(obj):
+def marshal_int(obj):
     numList = []
-    for i in range(4):
-        numList.append(obj % 256)
+
+    for _ in range(4):
+        byte = obj % 256
+        numList.append(byte)
         obj = obj // 256
 
-    numList.append(4+1)
-    numList = numList[::-1]
+    numList.append(4 + 1)
+    numList.reverse()
     return numList
 
 
-def unpackInt(obj):
+def unmarshal_int(obj):
     num = 0
     for i in range(1, obj[0]):
-        num += (obj[i]*int(math.pow(256, len(obj) - i - 1)))
+        num += (obj[i] * int(math.pow(256, len(obj) - i - 1)))
     return num
 
 
-def packString(obj):
-    arr = [0 for i in range(len(obj)+1)]
-    arr[0] = len(obj) + 1
-    for i in range(len(obj)):
-        arr[i+1] = ord(obj[i])
+def marshal_str(obj):
+    str_length = len(obj)
+    arr = [0] * (str_length + 1)
+    arr[0] = str_length + 1
+
+    for i in range(str_length):
+        arr[i + 1] = ord(obj[i])
+
     return arr
 
 
-def unpackString(obj):
-    str = ''
-    for i in range(1, obj[0]):
-        str += chr(obj[i])
-    return str
+def unmarshal_str(obj):
+    str_length = obj[0] - 1
+    char_list = [chr(obj[i]) for i in range(1, 1 + str_length)]
+    return ''.join(char_list)
 
 
-def packFloat(obj):
-    return packString(str(obj))
+def marshal_flt(obj):
+    return marshal_str(str(obj))
 
 
-def unpackFloat(obj):
-    return float(unpackString(obj))
+def unmarshal_flt(obj):
+    return float(unmarshal_str(obj))

@@ -9,6 +9,7 @@ import random
 
 timeoutLimit = 1
 
+
 class Client:
 
     def __init__(self, host='localhost', port=7777, freshness_interval=10, simulateLoss=False):
@@ -35,7 +36,6 @@ class Client:
         except socket.error as e:
             print(f'Error closing socket:\n{e}')
         print('Socket closed...')
-    
 
     def fetch_file(self):
         file_identifier = input('Input file path name:')
@@ -72,7 +72,7 @@ class Client:
                     try:
                         self.sock.settimeout(tracking_period)  # Adjust timeout to tracking period
                         packet, server_addr = self.sock.recvfrom(4096)  # Await update notifications
-                        alteration_details = unpack(packet)[-1]
+                        alteration_details = unmarshal(packet)[-1]
                         alteration_count += 1
                         print('Alteration #{0} in {1}: {2}'.format(
                             alteration_count, file_path, alteration_details))
@@ -85,7 +85,6 @@ class Client:
                 self.sock.settimeout(timeoutLimit)  # Reset to default timeout
                 self.initiateMonitoring(file_path, tracking_period, REM)
                 print('Monitoring concluded for "{}" with {} alterations.'.format(file_path, alteration_count))
-
 
     def tally_file_characters(self):
         path_to_file = input('Input file path name:')
@@ -101,7 +100,6 @@ class Client:
     def invalidInput(self):
         print('Invalid input. Please enter a number from 1-5 or "q" to exit.\n')
 
-
     def send(self, message):
         transmission_in_progress = True
         while transmission_in_progress:
@@ -110,11 +108,11 @@ class Client:
                 # Introduce potential packet loss for simulation purposes
                 packet_loss_simulation = self.simulateLoss and random.randint(0, 2) == 0
                 if packet_loss_simulation or not self.simulateLoss:
-                    packet = pack(message)
+                    packet = marshal(message)
                     self.sock.sendto(packet, (self.HOST, self.PORT))
 
                 response_packet, server_address = self.sock.recvfrom(4096)
-                response_message = unpack(response_packet)
+                response_message = unmarshal(response_packet)
                 if response_message[0] == 0:
                     self.cache[1] = response_message[-1]
                 return response_message
@@ -174,7 +172,6 @@ class Client:
                 print('Outdated cache. Requesting update from server.')
                 return True
 
-
     def showMenu(self):
         print('\n*****Function Menu of Remote File System*****')
         print('1: Read content of a file.')
@@ -198,7 +195,7 @@ class Client:
                 action()
 
         self.closeSocket()
-    
+
     def getAction(self, choice):
         actions = {
             '1': self.fetch_file,
@@ -208,10 +205,9 @@ class Client:
             '5': self.createFile
         }
         return actions.get(choice, self.invalidInput)
-    
+
 
 if __name__ == "__main__":
-
     parser = optparse.OptionParser()
 
     parser.add_option('-t', '--freshness_interval',
