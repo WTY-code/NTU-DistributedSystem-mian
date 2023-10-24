@@ -119,6 +119,7 @@ class Server:
                 else:
                     f.seek(offset, 0)
                     content = f.read(int(length))
+                    # content = f.read()
                     f.close()
                     return [1, 1, STR, content]
         except FileNotFoundError:
@@ -144,10 +145,10 @@ class Server:
 
         except FileNotFoundError:
             return [2, 1, ERR, "File does not exist on server"]
-        except OSError as e:
+        except OSError as os_e:
+            return [2, 1, ERR, str(os_e)]
+        except Exception as e:
             return [2, 1, ERR, str(e)]
-        except Exception as other_e:
-            return [2, 1, ERR, str(other_e)]
 
     def monitorFile(self, filePathName, monitorInterval, address, opr):
 

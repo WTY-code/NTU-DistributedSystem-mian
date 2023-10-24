@@ -7,18 +7,18 @@ import optparse
 import time
 import random
 
-timeoutLimit = 1
+timeoutLimit = 5
 
 
 class Client:
 
-    def __init__(self, host='localhost', port=7777, freshness_interval=10, simulateLoss=False):
-        self.cache = [0, 0, '']
+    def __init__(self, host='localhost', port=7777, freshness_interval=6000000, simulateLoss=False):
         self.HOST = host
         self.PORT = port
-        self.freshness_interval = freshness_interval
+        self.freshness_interval = 60000#freshness_interval
         self.simulateLoss = simulateLoss
         self.sock = None
+        self.cache_list = {} # {filename1:(timelastread, content), filename2:(timelastread, content)}
 
     def startSocket(self):
         print('Starting client socket...')
@@ -37,23 +37,35 @@ class Client:
             print(f'Error closing socket:\n{e}')
         print('Socket closed...')
 
-    def fetch_file(self):
-        file_identifier = input('Input file path name:')
+    def read_file(self):
+        file_name = input('Input file name:')
         start = int(input('Input offset in bytes:'))
         length = int(input('Input number of bytes:'))
-        is_cache_invalid = self.checkCache()
-        if not is_cache_invalid:
-            print('Retrieved from Cache: {}'.format(self.cache[-1]))
+        end = start + length -1
+        if self.is_cache_valid(file_name, start, end):
+            content = self.fetch_from_cache(file_name, start, end)
+            print('Retrieved from Cache: {}'.format(content))
         else:
-            server_message = self.queryRead(file_identifier, start, length)
+            server_message = self.queryRead(file_name, start, length)
             print('Server Reply: {}'.format(server_message[-1]))
+        # is_cache_invalid = self.checkCache()
+        # if not is_cache_invalid:
+        #     print('Retrieved from Cache: {}'.format(self.cache[-1]))
+        # else:
+        #     server_message = self.queryRead(file_name, start, length)
+        #     print('Server Reply: {}'.format(server_message[-1]))
 
     def add_content(self):
-        file_path = input('Input file path name:')
+        file_name = input('Input file name:')
         byte_offset = int(input('Input offset in bytes:'))
         content_sequence = input('Input sequence of bytes:')
-        server_response = self.queryInsert(file_path, byte_offset, content_sequence)
+        server_response = self.queryInsert(file_name, byte_offset, content_sequence)
         print('Server Reply: {}'.format(server_response[-1]))
+        # read your writes
+        if file_name in self.cache_list:
+            self.delete_cache(file_name)
+
+        return
 
     def monitorFile(self):
         file_path = input('Input file path name:')
@@ -76,7 +88,9 @@ class Client:
                         alteration_count += 1
                         print('Alteration #{0} in {1}: {2}'.format(
                             alteration_count, file_path, alteration_details))
-                        self.cache[-1] = alteration_details
+                        # server inform client updates, client make a cache
+                        self.add_cache(file_path, time.time(), 0, len(alteration_details)-1, alteration_details)
+                        # self.cache[-1] = alteration_details
                         # Decrement remaining monitor interval
                         tracking_period -= (time.time() - observation_commencement)
                     except socket.timeout:
@@ -125,18 +139,34 @@ class Client:
         item = self.send([1, 3, STR, INT, INT, filePathname, offset, numBytes])
         errors = ["File does not exist on server",
                   "Offset exceeds file length"]
-        if item[-1] in errors:
-            self.cache[0], self.cache[1] = 0, 0
+        # if item[-1] in errors:
+        #     self.cache[0], self.cache[1] = 0, 0
+        content = item[-1]
+        if content == errors[0]:
+            if filePathname in self.cache_list:
+                self.delete_cache(filePathname)
+        elif content == errors[1]:
+            pass
         else:
-            self.cache[2] = item[-1]
+            # self.cache[2] = item[-1]
+            # read new file, make a cache entry and add it into cache list1
+            start = offset
+            self.add_cache(filePathname, time.time(), start, start + numBytes - 1, content)
+            # cache_entry = {}
+            # cache_entry["T_lastread"] = time.time()
+            # cache_entry["start"] = offset
+            # cache_entry["end"] = offset + numBytes - 1 # index of last char
+            # cache_entry["content"] = item[-1]
+            # self.cache_list[filePathname] = cache_entry
         return item
 
     def queryInsert(self, filePathname, offset, seq):
         item = self.send([2, 3, STR, INT, STR, filePathname, offset, seq])
-        errors = ["File does not exist on server",
-                  "Offset exceeds file length"]
-        if item[-1] not in errors:
-            self.cache[-1], self.cache[1] = item[-1], item[-2]
+        # errors = ["File does not exist on server",
+        #           "Offset exceeds file length"]
+        # if item[-1] not in errors:
+        #     # 将读到的文件内容存入cache
+        #     self.cache[-1], self.cache[1] = item[-1], item[-2]
         return item
 
     def initiateMonitoring(self, filePathname, monitorInterval, opr):
@@ -152,25 +182,70 @@ class Client:
         item = self.send([5, 2, STR, STR, fileName, char])
         return item
 
-    def checkCache(self):
-        cacheTimestamp, clientTimestamp = self.cache[0], self.cache[1]
-        if self.cache == '':
-            print('No cache data. Requesting from server.')
+    def within_cache_range(self, filename, start, end):
+        if start >= self.cache_list[filename]["start"] \
+                    and end <= self.cache_list[filename]["end"]:
             return True
-
-        currentTimestamp = time.time()
-        if currentTimestamp - cacheTimestamp < self.freshness_interval:
-            print('Server access unnecessary, loading from cache.')
-            return False
         else:
-            serverTimestamp = self.send([0, 1, STR, 'Get Tserver'])[-1]  # Method to retrieve server time
-            self.cache[0] = currentTimestamp
-            if clientTimestamp == serverTimestamp:
-                print('Cache is up-to-date. No server changes detected.')
-                return False
-            elif clientTimestamp < serverTimestamp:
-                print('Outdated cache. Requesting update from server.')
+            return False
+
+    def within_freshness(self, filename):
+        if (time.time() - self.cache_list[filename]["T_lastread"]) <= self.freshness_interval:
+            return True
+        else:
+            return False
+
+
+    def is_cache_valid(self, filename, start, end):
+        # T_now = time.time()
+        # filename i
+        if filename in self.cache_list:
+            if self.within_cache_range(filename, start, end) and self.within_freshness(filename):
+                print("cache of {} is valid!".format(filename))
                 return True
+            elif not self.within_freshness(filename):
+                self.delete_cache(filename)
+        else:
+            print("No cache entry.")
+        return False
+
+    def fetch_from_cache(self, filename, start, end):
+        return self.cache_list[filename]["content"][start:(end+1)]
+
+    def delete_cache(self, filename):
+        try:
+            del self.cache_list[filename]
+            print("cache entry of {} should be refreshed, delete invalid entry.".format(filename))
+        except Exception as e:
+            print("ERROR in deleting cache entry of {}".format(filename))
+
+    def add_cache(self, filename, T_lastread, start, end, content):
+        cache_entry = {}
+        cache_entry["T_lastread"] = T_lastread
+        cache_entry["start"] = start
+        cache_entry["end"] = end # index of last char
+        cache_entry["content"] = content
+        self.cache_list[filename] = cache_entry
+
+    # def checkCache(self):
+    #     cacheTimestamp, clientTimestamp = self.cache[0], self.cache[1]
+    #     if self.cache == '':
+    #         print('No cache data. Requesting from server.')
+    #         return True
+    #
+    #     currentTimestamp = time.time()
+    #     if currentTimestamp - cacheTimestamp < self.freshness_interval:
+    #         print('Server access unnecessary, loading from cache.')
+    #         return False
+    #     else:
+    #         serverTimestamp = self.send([0, 1, STR, 'Get Tserver'])[-1]  # Method to retrieve server time
+    #         self.cache[0] = currentTimestamp
+    #         if clientTimestamp == serverTimestamp:
+    #             print('Cache is up-to-date. No server changes detected.')
+    #             return False
+    #         elif clientTimestamp < serverTimestamp:
+    #             print('Outdated cache. Requesting update from server.')
+    #             return True
 
     def showMenu(self):
         print('\n*****Function Menu of Remote File System*****')
@@ -198,7 +273,7 @@ class Client:
 
     def getAction(self, choice):
         actions = {
-            '1': self.fetch_file,
+            '1': self.read_file,
             '2': self.add_content,
             '3': self.monitorFile,
             '4': self.tally_file_characters,
