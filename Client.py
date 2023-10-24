@@ -7,8 +7,10 @@ import optparse
 import time
 import random
 
+timeoutLimit = 1
 
 class Client:
+
     def __init__(self):
         self.cache = [0, 0, '']  # cache = [Tvalid, Tclient, cacheEntry]
         self.HOST = 'localhost'
@@ -16,12 +18,13 @@ class Client:
         self.freshness_interval = 10
         self.simulateLoss = True
 
+
     def run(self):
         print('Starting client socket...')
 
         try:
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.sock.settimeout(1)
+            self.sock.settimeout(timeoutLimit)
         except socket.error as e:
             print("Failed to create client socket:\n{}".format(e))
             sys.exit()
@@ -84,7 +87,7 @@ class Client:
                                 # self.queryMonitor(filePathname, monitorInterval, ADD)
                                 break
                         print(time.time() - timeStart)
-                        self.sock.settimeout(1) # 恢复超时时间
+                        self.sock.settimeout(timeoutLimit) # 恢复超时时间
                         self.queryMonitor(filePathname, monitorInterval, REM)
                         print('Monitoring of file "{}" ended with {} times change.'.format(filePathname,updateTimes))
 

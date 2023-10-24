@@ -1,3 +1,5 @@
+import os
+
 from Marshal import *
 from Config import *
 import socket
@@ -18,6 +20,10 @@ class Server:
         self.invocationSemantics = 'AT_LEAST_ONCE'
         self.simulateLoss = True
         self.dictPath = './file/'
+        self.dict = 'file'
+        # create file dictionary
+        if not os.path.exists(self.dict):
+            os.mkdir(self.dict)
 
     def run(self):
         try:
@@ -39,6 +45,7 @@ class Server:
         except socket.error as e:
             print('Socket bind failed:\n{}'.format(e))
             sys.exit()
+
 
         # once socket bind, keep talking to client
         self.await_data()
