@@ -83,8 +83,8 @@ class Server:
         if service_id not in [0,1,2,3,4,5]:
             raise ValueError("Received an invalid service id!")
 
-        elif service_id == 0:
-            return self.reply_server_time()
+        # elif service_id == 0:
+        #     return self.reply_server_time()
 
         elif service_id == 1:  # Read content of file
 
@@ -124,7 +124,7 @@ class Server:
                     f.close()
                     return [1, 1, STR, content]
         except FileNotFoundError:
-            return [1, 1, ERR, "ERROR: File does not exist!"]
+            return [1, 1, ERR, "ERROR: File does not exist on server"]
         except OSError as e:
             return [1, 1, ERR, str(e)]
 

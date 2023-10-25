@@ -13,7 +13,7 @@ class Client:
     def __init__(self, host='localhost', port=7777, freshness_interval=6000000, simulateLoss=False):
         self.HOST = host
         self.PORT = port
-        self.freshness_interval = 60000#freshness_interval
+        self.freshness_interval = freshness_interval
         self.simulateLoss = simulateLoss
         self.sock = None
         self.cache_list = {} # {filename1:(timelastread, content), filename2:(timelastread, content)}
@@ -131,8 +131,8 @@ class Client:
 
                 response_packet, server_address = self.sock.recvfrom(4096)
                 response_message = unmarshal(response_packet)
-                if response_message[0] == 0:
-                    self.cache[1] = response_message[-1]
+                # if response_message[0] == 0:
+                #     self.cache[1] = response_message[-1]
                 return response_message
             except socket.timeout:
                 print('Transmission delay exceeded. Retrying...')
@@ -146,10 +146,10 @@ class Client:
         # if item[-1] in errors:
         #     self.cache[0], self.cache[1] = 0, 0
         content = item[-1]
-        if content == errors[0]:
+        if errors[0] in content:
             if filePathname in self.cache_list:
                 self.delete_cache(filePathname)
-        elif content == errors[1]:
+        elif errors[1] in content:
             pass
         else:
             # self.cache[2] = item[-1]
@@ -297,7 +297,7 @@ if __name__ == "__main__":
     parser.add_option('-t', '--freshness_interval',
                       action="store", dest="freshness_interval",
                       help='Sets the freshness interval of the client',
-                      default=10
+                      default=60000
                       )
 
     parser.add_option('-i', '--ip_server',
