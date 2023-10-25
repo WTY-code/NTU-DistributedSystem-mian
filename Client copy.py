@@ -143,6 +143,7 @@ class Client:
         errors = ["File does not exist on server",
                   "Offset exceeds file length"]
         if item[-1] in errors:
+            # to do list:delete from cache list
             self.cache[0], self.cache[1] = 0, 0
         else:
             self.cache[2] = item[-1]
