@@ -10,11 +10,11 @@ timeoutLimit = 5
 
 class Client:
 
-    def __init__(self, host='localhost', port=7777, freshness_interval=6000000, simulateLoss=False):
+    def __init__(self, host='localhost', port=61032, freshness_interval=6000000, simulateLoss1=False):
         self.HOST = host
         self.PORT = port
         self.freshness_interval = freshness_interval
-        self.simulateLoss = simulateLoss
+        self.simulateLoss = simulateLoss1
         self.sock = None
         self.cache_list = {} # {filename1:(timelastread, content), filename2:(timelastread, content)}
 
@@ -124,7 +124,7 @@ class Client:
             try:
                 print(message)
                 # Introduce potential packet loss for simulation purposes
-                packet_loss_simulation = self.simulateLoss and random.randrange(0, 10) > 2
+                packet_loss_simulation = self.simulateLoss and random.randrange(0, 10) > 4
                 if packet_loss_simulation or not self.simulateLoss:
                     packet = marshal(message)
                     self.sock.sendto(packet, (self.HOST, self.PORT))
@@ -309,11 +309,14 @@ if __name__ == "__main__":
     parser.add_option('-p', '--port',
                       action="store", dest="port",
                       help='Sets the port of the server for client to send data to',
-                      default=7777
+                      default=61032
                       )
-
+    parser.add_option('-l', '--simulateLoss',
+                      action="store", dest="simulateLoss",
+                      help="Sets the simulateLoss True or False",
+                      default='False')
     options, args = parser.parse_args()
 
-    client = Client(host=options.ip, port=int(options.port), freshness_interval=options.freshness_interval)
+    client = Client(host=options.ip, port=int(options.port), freshness_interval=options.freshness_interval,simulateLoss1 = bool(options.simulateLoss))
 
     client.mainLoop()
