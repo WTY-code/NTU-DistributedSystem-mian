@@ -1,4 +1,4 @@
-from Config import *
+from Global import *
 import math
 
 
