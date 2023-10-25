@@ -10,15 +10,15 @@ import optparse
 
 
 class Server:
-    def __init__(self):
+    def __init__(self,invocationSemantics1= 'AT_LEAST_ONCE',simulateLoss1 = False):
         self.UDP_ip = "localhost" #"10.241.239.157"
-        self.UDP_port = 7777
+        self.UDP_port = 61032
         self.time = time.time()
         self.cache = []
         self.cacheLimit = 10
         self.monitorList = []  # monitoring list format: [address, filePathname]
-        self.invocationSemantics = 'AT_LEAST_ONCE'
-        self.simulateLoss = False
+        self.invocationSemantics = invocationSemantics1
+        self.simulateLoss = simulateLoss1
         self.dictPath = './file/'
         self.dict = 'file'
         # create file dictionary
@@ -214,7 +214,7 @@ class Server:
     def replyAtLeastOnce(self, data, address):
         reply = self.process_req(data, address)
 
-        if self.simulateLoss and random.randrange(0, 10) > 2:
+        if self.simulateLoss and random.randrange(0, 10) > 4:
             self.sock.sendto(marshal(reply), address)
         elif self.simulateLoss is False:
             self.sock.sendto(marshal(reply), address)
@@ -224,7 +224,7 @@ class Server:
         # if found, reply client with cacheEntry
         for cacheEntry in self.cache:
             if cacheEntry[0] == [address[0], address[1], data]:
-                if self.simulateLoss and random.randrange(0, 10) > 2:
+                if self.simulateLoss and random.randrange(0, 10) > 4:
                     self.sock.sendto(marshal(cacheEntry[1]), address)
                 elif self.simulateLoss == False:
                     self.sock.sendto(marshal(cacheEntry[1]), address)
@@ -236,7 +236,7 @@ class Server:
             self.cache = self.cache[1:]
         self.cache.append(([address[0], address[1], data], reply))
 
-        if self.simulateLoss and random.randrange(0, 10) > 2:
+        if self.simulateLoss and random.randrange(0, 10) > 4:
             self.sock.sendto(marshal(reply), address)
         elif self.simulateLoss is False:
             self.sock.sendto(marshal(reply), address)
@@ -252,15 +252,19 @@ if __name__ == "__main__":
     parser.add_option('-p', '--UDP_port',
                       action="store", dest="UDP_port",
                       help="Sets the port of server",
-                      default=7777)
+                      default=61032)
 
     parser.add_option('-s', '--invocationSemantics',
                       action="store", dest="invocationSemantics",
                       help="Sets the invocation semantics",
                       default='AT_LEAST_ONCE')
-
-    server = Server()
+    parser.add_option('-l', '--simulateLoss',
+                      action="store", dest="simulateLoss",
+                      help="Sets the simulateLoss True or False",
+                      default='False')
+    
     options, args = parser.parse_args()
+    server = Server(invocationSemantics1 = str(options.invocationSemantics),simulateLoss1 = bool(options.simulateLoss))
     server.UDP_ip = str(options.UDP_ip)
     server.UDP_port = int(options.UDP_port)
     server.invocationSemantics = str(options.invocationSemantics)
