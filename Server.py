@@ -214,7 +214,7 @@ class Server:
     def replyAtLeastOnce(self, data, address):
         reply = self.process_req(data, address)
 
-        if self.simulateLoss and random.randrange(0, 2) == 0:
+        if self.simulateLoss and random.randrange(0, 10) > 2:
             self.sock.sendto(marshal(reply), address)
         elif self.simulateLoss is False:
             self.sock.sendto(marshal(reply), address)
@@ -224,7 +224,7 @@ class Server:
         # if found, reply client with cacheEntry
         for cacheEntry in self.cache:
             if cacheEntry[0] == [address[0], address[1], data]:
-                if self.simulateLoss and random.randrange(0, 2) == 0:
+                if self.simulateLoss and random.randrange(0, 10) > 2:
                     self.sock.sendto(marshal(cacheEntry[1]), address)
                 elif self.simulateLoss == False:
                     self.sock.sendto(marshal(cacheEntry[1]), address)
@@ -236,7 +236,7 @@ class Server:
             self.cache = self.cache[1:]
         self.cache.append(([address[0], address[1], data], reply))
 
-        if self.simulateLoss and random.randrange(0, 2) == 0:
+        if self.simulateLoss and random.randrange(0, 10) > 2:
             self.sock.sendto(marshal(reply), address)
         elif self.simulateLoss is False:
             self.sock.sendto(marshal(reply), address)

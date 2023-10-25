@@ -124,7 +124,7 @@ class Client:
             try:
                 print(message)
                 # Introduce potential packet loss for simulation purposes
-                packet_loss_simulation = self.simulateLoss and random.randint(0, 2) == 0
+                packet_loss_simulation = self.simulateLoss and random.randrange(0, 10) > 2
                 if packet_loss_simulation or not self.simulateLoss:
                     packet = marshal(message)
                     self.sock.sendto(packet, (self.HOST, self.PORT))
