@@ -1,29 +1,30 @@
 import os
-import sys
-import time
+
+from Marshal import *
+from Config import *
 import socket
+import time
+import sys
 import random
 import optparse
-from Serialization import *
-from Global import *
+
 
 class Server:
     def __init__(self,invocationSemantics1= 'AT_LEAST_ONCE',simulateLoss1 = False):
-        self.UDP_ip = "localhost"                       # server ip
-        self.UDP_port = 61032                           # port
+        self.UDP_ip = "localhost" #"10.241.239.157"
+        self.UDP_port = 61032
         self.time = time.time()
-        self.cache = []                                 # cache for requests from clients, used in 'at-most-once'
-        self.cacheLimit = 10                            # cache size
-        self.monitorList = []                           # monitoring list format: [address, filePathname]
-        self.invocationSemantics = invocationSemantics1 # 2 invocation semantics: at least once, at most once
-        self.simulateLoss = simulateLoss1               # switch of message loss simulation, default loss ratio = 50%
-        self.dictPath = './file/'                       # all files created through this system will be stored under this directory
+        self.cache = []
+        self.cacheLimit = 10
+        self.monitorList = []  # monitoring list format: [address, filePathname]
+        self.invocationSemantics = invocationSemantics1
+        self.simulateLoss = simulateLoss1
+        self.dictPath = './file/'
         self.dict = 'file'
         # create file dictionary
         if not os.path.exists(self.dict):
             os.mkdir(self.dict)
 
-    # Create a socket and bind it to port
     def run(self):
         try:
             self.sock = socket.socket(socket.AF_INET,  # Internet
@@ -32,6 +33,7 @@ class Server:
             print('Failed to create socket:\n{}'.format(e))
             sys.exit()
 
+        # bind socket to port
         serverAddress = (self.UDP_ip, self.UDP_port)
         print('Starting server on {} Port {}...'.format(
             self.UDP_ip, self.UDP_port))
@@ -44,17 +46,20 @@ class Server:
             print('Socket bind failed:\n{}'.format(e))
             sys.exit()
 
-        self.wait_for_req()   # Preparation done, start serving for clients
 
+        # once socket bind, keep talking to client
+        self.wait_for_req()
+
+    # await data from client
     def wait_for_req(self):
         while True:
+            #print('Monitor List: {}'.format(self.monitorList))
             print('Server is waiting for request from client...')
             msg, address = self.sock.recvfrom(SOCK_MAX)
-            # print(msg)
+            print(msg)
             print('Received request message from {}:\n{!r}'.format(address, msg))
             self.reply(msg, address)
 
-    # Reply requests according to invocation semantics
     def reply(self, req, address):
         if req is None:
             raise ValueError("Received an empty Request!")
@@ -72,15 +77,18 @@ class Server:
             print('ERROR in closing socket:\n{}'.format(e))
         print('Socket closed...')
 
-    # Excute different functions according to service id
     def process_req(self, req, address):
         msg = unmarshal(req)
         service_id = msg[0]
-        if service_id not in [1,2,3,4,5]: # Filter out invalid input
+        if service_id not in [0,1,2,3,4,5]:
             raise ValueError("Received an invalid service id!")
 
+        # elif service_id == 0:
+        #     return self.reply_server_time()
+
         elif service_id == 1:  # Read content of file
-            return self.read_file(msg[2], msg[3], msg[4])  # Parameters are: filename, offset, length
+
+            return self.read_file(msg[2], msg[3], msg[4])
 
         elif service_id == 2:  # Insert content into file
             self.time = time.time()
@@ -88,30 +96,31 @@ class Server:
             self.callback(content, msg)
             return content
 
-        elif service_id == 3:  # Monitor updates made to specified file
-            return self.monitorFile(msg[2], msg[3], address, msg[-1])  # Parameters are: filePathName, monitorInterval, address, opr
+        elif service_id == 3:  # Monitor updates made to content of specified file
+            return self.monitorFile(msg[2], msg[3], address, msg[-1])
 
-        elif service_id == 4:  # Get names of files under ./file, it is idempotent
+        elif service_id == 4:  # Count content in file
             return self.collect_file_names()
+            # return self.countFile(msg[2])
 
-        elif service_id == 5:  # Create a new file, it is non-idempotent(last modification time changes)
+        elif service_id == 5:  # Create a new file
             return self.createFile(msg[2], msg[3])
 
-    # Read files from local disk
+    def reply_server_time(self):
+        return [0, 1, FLT, self.time]
+
     def read_file(self, file_name, offset, length):
         try:
             file_path = self.dictPath + file_name
             with open(file_path, "r") as f:
                 content = f.read()
                 file_len = len(content)
-                # if offset exceeds the file length, reply an error message
                 if offset >= file_len:
-                    # [service_id, num_obj, msg_type, msg_ctnt]
                     return [1, 1, ERR, "Offset exceeds file length"]
-                # else read from offset-th bytes by length bytes
                 else:
                     f.seek(offset, 0)
                     content = f.read(int(length))
+                    # content = f.read()
                     f.close()
                     return [1, 1, STR, content]
         except FileNotFoundError:
@@ -163,17 +172,16 @@ class Server:
             print(self.monitorList)
             return [3, 1, STR, '{} removed from monitoring list since monitor interval ended'.format(address)]
 
-    # def countFile(self, filePathName):
-    #     try:
-    #         fileName = self.dictPath + filePathName
-    #         f = open(fileName, 'r')
-    #         count = len(f.read())
-    #         f.close()
-    #         return [4, 1, INT, count]
-    #     except FileNotFoundError:
-    #         return [4, 1, ERR, "File does not exist on server"]
+    def countFile(self, filePathName):
+        try:
+            fileName = self.dictPath + filePathName
+            f = open(fileName, 'r')
+            count = len(f.read())
+            f.close()
+            return [4, 1, INT, count]
+        except FileNotFoundError:
+            return [4, 1, ERR, "File does not exist on server"]
 
-    # Get names of files under ./file/
     def collect_file_names(self):
         file_names = []
         for root, dirs, files in os.walk(self.dictPath):
@@ -196,9 +204,9 @@ class Server:
             return [5, 1, ERR, str(e)]
 
     def callback(self, content, d):
-        if len(self.monitorList) > 0:   # Checks if there are clients registered for monitoring
+        if len(self.monitorList) > 0:  # Checks if there are clients registered for monitoring
             for i in self.monitorList:  # Loops through whole monitoring list
-                if d[2] == i[1]:        # Checks if file is same as file registered for monitoring
+                if d[2] == i[1]:  # Checks if file is same as file registered for monitoring
                     print('Callback to {}: {}'.format(i[0], content))
                     self.sock.sendto(marshal(content), i[0])
         return
